@@ -3,6 +3,7 @@
 
 from datetime import date, datetime
 
+from odoo import Command
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
@@ -18,7 +19,7 @@ class TestCompanyLeave(TransactionCase):
 
         cls.bank_holiday = cls.env['hr.leave.type'].create({
             'name': 'Bank Holiday',
-            'responsible_id': cls.env.user.id,
+            'responsible_ids': [Command.link(cls.env.ref('base.user_admin').id)],
             'company_id': cls.company.id,
             'requires_allocation': 'no',
         })
@@ -323,7 +324,7 @@ class TestCompanyLeave(TransactionCase):
         })
         company_leave._compute_date_from_to()
 
-        with self.assertQueryCount(__system__=605, admin=867):  # 770 community
+        with self.assertQueryCount(__system__=607, admin=867):  # 770 community
             # Original query count: 1987
             # Without tracking/activity context keys: 5154
             company_leave.action_validate()

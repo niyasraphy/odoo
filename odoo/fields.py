@@ -19,17 +19,19 @@ import logging
 import uuid
 import warnings
 
-from markupsafe import Markup
 import psycopg2
-from psycopg2.extras import Json as PsycopgJson
 import pytz
+from markupsafe import Markup
+from psycopg2.extras import Json as PsycopgJson, execute_values
+from psycopg2.sql import SQL, Identifier
 from difflib import get_close_matches
 from hashlib import sha256
 
 from .tools import (
-    float_repr, float_round, float_compare, float_is_zero, html_sanitize, human_size,
+    float_repr, float_round, float_compare, float_is_zero, human_size,
     pg_varchar, ustr, OrderedSet, pycompat, sql, date_utils, unique,
     image_process, merge_sequences, SQL_ORDER_BY_TYPE, is_list_of, has_list_types,
+    html_normalize, html_sanitize,
 )
 from .tools import DEFAULT_SERVER_DATE_FORMAT as DATE_FORMAT
 from .tools import DEFAULT_SERVER_DATETIME_FORMAT as DATETIME_FORMAT
@@ -1988,21 +1990,25 @@ class Html(_String):
 
             original_value = record[self.name]
             if original_value:
-                initial_value_sanitized = html_sanitize(original_value, **sanitize_vals)
+                # Note that sanitize also normalize
+                original_value_sanitized = html_sanitize(original_value, **sanitize_vals)
+                original_value_normalized = html_normalize(original_value)
 
-                def get_parsed(val):
-                    return etree.tostring(html.fromstring(val))
-
-                # could have been emptied by the sanitizer
                 if (
-                    not initial_value_sanitized
-                    or get_parsed(original_value) != get_parsed(initial_value_sanitized)
+                    not original_value_sanitized  # sanitizer could empty it
+                    or original_value_normalized != original_value_sanitized
                 ):
                     # The field contains element(s) that would be removed if
                     # sanitized. It means that someone who was part of a group
                     # allowing to bypass the sanitation saved that field
                     # previously.
-                    raise UserError(_("Someone with escalated rights previously modified this field (%s %s), you are therefore not able to modify it yourself.", record._description, self.string))
+                    raise UserError(_(
+                        "The field value you're saving (%s %s) includes content that is "
+                        "restricted for security reasons. It is possible that someone "
+                        "with higher privileges previously modified it, and you are therefore "
+                        "not able to modify it yourself while preserving the content.",
+                        record._description, self.string,
+                    ))
 
         return html_sanitize(value, **sanitize_vals)
 
@@ -4673,13 +4679,13 @@ class Many2many(_RelationalMulti):
                                  model, self.relation, self._module)
         comodel = model.env[self.comodel_name]
         if not sql.table_exists(cr, self.relation):
-            query = """
+            query = psycopg2.sql.SQL("""
                 CREATE TABLE "{rel}" ("{id1}" INTEGER NOT NULL,
                                       "{id2}" INTEGER NOT NULL,
                                       PRIMARY KEY("{id1}","{id2}"));
                 COMMENT ON TABLE "{rel}" IS %s;
                 CREATE INDEX ON "{rel}" ("{id2}","{id1}");
-            """.format(rel=self.relation, id1=self.column1, id2=self.column2)
+            """).format(rel=psycopg2.sql.SQL(self.relation), id1=psycopg2.sql.SQL(self.column1), id2=psycopg2.sql.SQL(self.column2))
             cr.execute(query, ['RELATION BETWEEN %s AND %s' % (model._table, comodel._table)])
             _schema.debug("Create table %r: m2m relation between %r and %r", self.relation, model._table, comodel._table)
             model.pool.post_init(self.update_db_foreign_keys, model)
@@ -4821,10 +4827,12 @@ class Many2many(_RelationalMulti):
         pairs = [(x, y) for x, ys in new_relation.items() for y in ys - old_relation[x]]
         if pairs:
             if self.store:
-                query = "INSERT INTO {} ({}, {}) VALUES {} ON CONFLICT DO NOTHING".format(
-                    self.relation, self.column1, self.column2, ", ".join(["%s"] * len(pairs)),
+                query = SQL("INSERT INTO {} ({}, {}) VALUES %s ON CONFLICT DO NOTHING").format(
+                    Identifier(self.relation),
+                    Identifier(self.column1),
+                    Identifier(self.column2),
                 )
-                cr.execute(query, pairs)
+                execute_values(cr._obj, query, pairs)
 
             # update the cache of inverse fields
             y_to_xs = defaultdict(set)
@@ -4860,9 +4868,13 @@ class Many2many(_RelationalMulti):
                 for y, xs in y_to_xs.items():
                     xs_to_ys[frozenset(xs)].add(y)
                 # delete the rows where (id1 IN xs AND id2 IN ys) OR ...
-                COND = "{} IN %s AND {} IN %s".format(self.column1, self.column2)
-                query = "DELETE FROM {} WHERE {}".format(
-                    self.relation, " OR ".join([COND] * len(xs_to_ys)),
+                COND = SQL("{} IN %s AND {} IN %s").format(
+                    Identifier(self.column1),
+                    Identifier(self.column2),
+                )
+                query = SQL("DELETE FROM {} WHERE {}").format(
+                    Identifier(self.relation),
+                    SQL(" OR ").join([COND] * len(xs_to_ys)),
                 )
                 params = [arg for xs, ys in xs_to_ys.items() for arg in [tuple(xs), tuple(ys)]]
                 cr.execute(query, params)

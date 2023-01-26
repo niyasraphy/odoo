@@ -1,10 +1,10 @@
 /** @odoo-module */
 
-import PaymentAdyen from "@pos_adyen/js/payment_adyen";
+import { PaymentAdyen } from "@pos_adyen/js/payment_adyen";
 
 PaymentAdyen.include({
     _adyen_pay_data: function () {
-        var data = this._super();
+        var data = this._super(...arguments);
 
         if (data.SaleToPOIRequest.PaymentRequest.SaleData.SaleToAcquirerData) {
             data.SaleToPOIRequest.PaymentRequest.SaleData.SaleToAcquirerData +=

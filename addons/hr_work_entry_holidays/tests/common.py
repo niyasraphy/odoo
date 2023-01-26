@@ -3,6 +3,7 @@
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
+from odoo import Command
 from odoo.fields import Datetime
 from odoo.addons.hr_work_entry_contract.tests.common import TestWorkEntryBase
 
@@ -17,8 +18,10 @@ class TestWorkEntryHolidaysBase(TestWorkEntryBase):
             'name': 'Legal Leaves',
             'time_type': 'leave',
             'requires_allocation': 'no',
+            'responsible_ids': [Command.link(cls.env.ref('base.user_admin').id)],
             'work_entry_type_id': cls.work_entry_type_leave.id
         })
+        cls.env.ref('base.user_admin').notification_type = 'inbox'
 
         # I create a new employee "Jules"
         cls.jules_emp = cls.env['hr.employee'].create({
@@ -44,7 +47,6 @@ class TestWorkEntryHolidaysBase(TestWorkEntryBase):
                 (0, 0, {'name': 'Friday Evening', 'dayofweek': '4', 'hour_from': 13, 'hour_to': 16, 'day_period': 'afternoon'})
             ]
         })
-        cls.calendar_35h._onchange_hours_per_day()  # update hours/day
         cls.calendar_40h = cls.env['resource.calendar'].create({'name': 'Default calendar'})
 
         # This contract ends at the 15th of the month

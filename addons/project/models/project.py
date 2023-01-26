@@ -313,7 +313,7 @@ class Project(models.Model):
     active = fields.Boolean(default=True,
         help="If the active field is set to False, it will allow you to hide the project without removing it.")
     sequence = fields.Integer(default=10)
-    partner_id = fields.Many2one('res.partner', string='Customer', auto_join=True, tracking=True, domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]")
+    partner_id = fields.Many2one('res.partner', string='Customer', auto_join=True, tracking=True, check_company=True)
     partner_email = fields.Char(
         compute='_compute_partner_email', inverse='_inverse_partner_email',
         string='Email', readonly=False, store=True, copy=False)
@@ -698,6 +698,28 @@ class Project(models.Model):
         tasks.unlink()
         analytic_accounts_to_delete.unlink()
         return result
+
+    @api.model
+    def _search(self, args, offset=0, limit=None, order=None, count=False, access_rights_uid=None):
+        new_order, item_index, desc = [], -1, False
+        for index, order_item in enumerate((order or self._order).split(',')):
+            order_item_list = order_item.strip().lower().split(' ')
+            if order_item_list[0] == 'is_favorite':
+                item_index = index
+                desc = order_item_list[-1] == 'desc'
+            else:
+                new_order.append(order_item)
+        query = super()._search(args, offset, limit, ', '.join(new_order), count, access_rights_uid)
+        if item_index != -1:
+            query_order_list = query.order.split(',')
+            query_order_list.insert(item_index, f"""
+                "project_project"."id" IN (
+                    SELECT project_id
+                    FROM project_favorite_user_rel
+                    WHERE user_id = {self.env.uid}
+                ){" DESC" * desc}""")
+            query.order = ', '.join(query_order_list)
+        return query
 
     def message_subscribe(self, partner_ids=None, subtype_ids=None):
         """

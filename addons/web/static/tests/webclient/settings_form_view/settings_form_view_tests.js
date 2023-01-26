@@ -17,6 +17,7 @@ import { SettingsFormCompiler } from "@web/webclient/settings_form_view/settings
 import { registerCleanup } from "../../helpers/cleanup";
 import { makeFakeLocalizationService } from "@web/../tests/helpers/mock_services";
 import { session } from "@web/session";
+import { pick } from "@web/core/utils/objects";
 
 let target;
 let serverData;
@@ -135,10 +136,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             target.querySelector(".o_searchview input"),
             "searchview input should be focused"
         );
-        assert.containsOnce(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsOnce(target, ".app_settings_block:not(.d-none) .app_settings_header");
         const docLinks = [...target.querySelectorAll(".o_setting_box a")];
         assert.strictEqual(docLinks.length, 2);
         assert.strictEqual(
@@ -157,10 +155,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             "Hello there",
             "input value should be updated"
         );
-        assert.containsNone(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsNone(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "b");
         await execTimeouts();
@@ -182,10 +177,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             ["Title of group Bar"],
             "The title of group Bar is also selected"
         );
-        assert.containsOnce(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsOnce(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "Big");
         await execTimeouts();
@@ -201,10 +193,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             ["Title of group Bar"],
             "The title of group Bar is also selected"
         );
-        assert.containsOnce(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsOnce(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "Manage Us");
         await execTimeouts();
@@ -220,10 +209,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             ["Bar"],
             "Foo is not shown"
         );
-        assert.containsOnce(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsOnce(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "group Bar");
         await execTimeouts();
@@ -234,10 +220,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             ["Bar", "Big BAZ"],
             "When searching a title, all group is shown"
         );
-        assert.containsOnce(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsOnce(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "different");
         await execTimeouts();
@@ -248,10 +231,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             ["Personalize setting"],
             "When searching a title, all group is shown"
         );
-        assert.containsOnce(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsOnce(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "bx");
         await execTimeouts();
@@ -260,10 +240,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             target.querySelector(".o_nocontent_help"),
             "record not found message shown"
         );
-        assert.containsNone(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsNone(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "Fo");
         await execTimeouts();
@@ -279,10 +256,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             ["Foo", "Personalize setting"],
             "only settings in group Foo is shown"
         );
-        assert.containsOnce(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsOnce(target, ".app_settings_block:not(.d-none) .app_settings_header");
 
         await editSearch(target, "Hide");
         await execTimeouts();
@@ -298,10 +272,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             [],
             "Hide settings should not be shown"
         );
-        assert.containsNone(
-            target,
-            ".app_settings_block:not(.d-none) .app_settings_header"
-        );
+        assert.containsNone(target, ".app_settings_block:not(.d-none) .app_settings_header");
     });
 
     QUnit.test("unhighlight section not matching anymore", async function (assert) {
@@ -1004,7 +975,7 @@ QUnit.module("SettingsFormView", (hooks) => {
         assert.verifySteps([
             "create",
             "read",
-            'action executed {"name":"execute","type":"object","resModel":"res.config.settings","resIds":[1],"context":{"lang":"en","uid":7,"tz":"taht"},"buttonContext":{}}',
+            'action executed {"name":"execute","type":"object","resModel":"res.config.settings","resId":1,"resIds":[1],"context":{"lang":"en","uid":7,"tz":"taht"},"buttonContext":{}}',
         ]);
     });
 
@@ -1045,7 +1016,7 @@ QUnit.module("SettingsFormView", (hooks) => {
         assert.verifySteps([
             "create",
             "read",
-            'action executed {"context":{"lang":"en","uid":7,"tz":"taht"},"type":"object","name":"mymethod","resModel":"res.config.settings","resIds":[1],"buttonContext":{}}',
+            'action executed {"context":{"lang":"en","uid":7,"tz":"taht"},"type":"object","name":"mymethod","resModel":"res.config.settings","resId":1,"resIds":[1],"buttonContext":{}}',
         ]);
     });
 
@@ -1545,10 +1516,10 @@ QUnit.module("SettingsFormView", (hooks) => {
         const expectedCompiled = `
             <SettingsPage slots="{NoContentHelper:__comp__.props.slots.NoContentHelper}" initialTab="__comp__.props.initialApp" t-slot-scope="settings" modules="[{&quot;key&quot;:&quot;crm&quot;,&quot;string&quot;:&quot;CRM&quot;,&quot;imgurl&quot;:&quot;/crm/static/description/icon.png&quot;}]">
                 <SettingsApp key="\`crm\`" string="\`CRM\`" imgurl="\`/crm/static/description/icon.png\`" selectedTab="settings.selectedTab">
-                    <Setting title="\`\`"  help="\`\`" companyDependent="false" documentation="\`\`" record="__comp__.props.record" string="\`\`" addLabel="true" labels="[&quot;\`My\\&quot; little '  Label\`&quot;]">
+                    <SearchableSetting title="\`\`"  help="\`\`" companyDependent="false" documentation="\`\`" record="__comp__.props.record" string="\`\`" addLabel="true" labels="[&quot;\`My\\&quot; little '  Label\`&quot;]">
                         <FormLabel id="'display_name'" fieldName="'display_name'" record="__comp__.props.record" fieldInfo="__comp__.props.archInfo.fieldNodes['display_name']" className="&quot;highhopes&quot;" string="\`My&quot; little '  Label\`"/>
                         <Field id="'display_name'" name="'display_name'" record="__comp__.props.record" fieldInfo="__comp__.props.archInfo.fieldNodes['display_name']"/>
-                    </Setting>
+                    </SearchableSetting>
                 </SettingsApp>
             </SettingsPage>`;
         assert.areEquivalent(compiled.firstChild.innerHTML, expectedCompiled);
@@ -1591,7 +1562,7 @@ QUnit.module("SettingsFormView", (hooks) => {
             <Field id="'baz'" name="'baz'" record="__comp__.props.record" fieldInfo="__comp__.props.archInfo.fieldNodes['baz']"/>
             <HighlightText originalText="\` and this is the after text\`"/>`;
         assert.areEquivalent(
-            compiled.querySelector("Setting div.text-muted").innerHTML,
+            compiled.querySelector("SearchableSetting div.text-muted").innerHTML,
             expectedCompiled
         );
     });
@@ -1682,5 +1653,51 @@ QUnit.module("SettingsFormView", (hooks) => {
 
         await click(target.querySelector(".settings_tab [data-key='otherapp']"));
         assert.strictEqual(scrollingEl.scrollTop, scrollTop);
+    });
+
+    QUnit.test("server actions are called with the correct context", async (assert) => {
+        serverData.actions = {
+            1: {
+                id: 1,
+                name: "Settings view",
+                res_model: "res.config.settings",
+                type: "ir.actions.act_window",
+                views: [[1, "form"]],
+            },
+            2: {
+                model_name: "partner",
+                name: "Action partner",
+                type: "ir.actions.server",
+                usage: "ir_actions_server",
+            },
+        };
+
+        serverData.views = {
+            "res.config.settings,1,form": `
+             <form string="Settings" class="oe_form_configuration o_base_settings" js_class="base_settings">
+                <app string="CRM" name="crm">
+                    <button name="2" type="action"/>
+                </app>
+             </form>
+            `,
+            "res.config.settings,false,search": "<search></search>",
+        };
+
+        const mockRPC = (route, args) => {
+            if (route === "/web/action/run") {
+                assert.step(route);
+                assert.deepEqual(pick(args.context, "active_id", "active_ids", "active_model"), {
+                    active_id: 1,
+                    active_ids: [1],
+                    active_model: "res.config.settings",
+                });
+                return new Promise(() => {});
+            }
+        };
+
+        const webClient = await createWebClient({ serverData, mockRPC });
+        await doAction(webClient, 1);
+        await click(target.querySelector("button[name='2']"));
+        assert.verifySteps(["/web/action/run"]);
     });
 });

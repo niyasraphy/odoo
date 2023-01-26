@@ -595,8 +595,6 @@ class SaleOrderLine(models.Model):
                 'price_tax': amount_tax,
                 'price_total': amount_untaxed + amount_tax,
             })
-            if self.env.context.get('import_file', False) and not self.env.user.user_has_groups('account.group_account_manager'):
-                line.tax_id.invalidate_recordset(['invoice_repartition_line_ids'])
 
     @api.depends('price_subtotal', 'product_uom_qty')
     def _compute_price_reduce_taxexcl(self):
@@ -975,13 +973,18 @@ class SaleOrderLine(models.Model):
         protected_fields = self._get_protected_fields()
         if 'done' in self.mapped('state') and any(f in values.keys() for f in protected_fields):
             protected_fields_modified = list(set(protected_fields) & set(values.keys()))
-            fields = self.env['ir.model.fields'].search([
+
+            if 'name' in protected_fields_modified and all(self.mapped('is_downpayment')):
+                protected_fields_modified.remove('name')
+
+            fields = self.env['ir.model.fields'].sudo().search([
                 ('name', 'in', protected_fields_modified), ('model', '=', self._name)
             ])
-            raise UserError(
-                _('It is forbidden to modify the following fields in a locked order:\n%s')
-                % '\n'.join(fields.mapped('field_description'))
-            )
+            if fields:
+                raise UserError(
+                    _('It is forbidden to modify the following fields in a locked order:\n%s')
+                    % '\n'.join(fields.mapped('field_description'))
+                )
 
         result = super().write(values)
 
@@ -1051,6 +1054,9 @@ class SaleOrderLine(models.Model):
         else:
             order_date = fields.Datetime.now()
         return order_date + timedelta(days=self.customer_lead or 0.0)
+
+    def compute_uom_qty(self, new_qty, stock_move, rounding=True):
+        return self.product_uom._compute_quantity(new_qty, stock_move.product_uom, rounding)
 
     def _get_invoice_line_sequence(self, new=0, old=0):
         """

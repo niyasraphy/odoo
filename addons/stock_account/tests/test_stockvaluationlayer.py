@@ -895,6 +895,11 @@ class TestStockValuationChangeValuation(TestStockValuationCommon):
             'property_stock_valuation_account_id': cls.stock_valuation_account.id,
             'property_stock_journal': cls.stock_journal.id,
         })
+        cls.env.company.write({
+            'property_stock_account_input_categ_id': cls.stock_input_account.id,
+            'property_stock_account_output_categ_id': cls.stock_output_account.id,
+            'property_stock_valuation_account_id': cls.stock_valuation_account.id,
+        })
 
     def test_standard_manual_to_auto_1(self):
         self.product1.product_tmpl_id.categ_id.property_cost_method = 'standard'
@@ -994,6 +999,21 @@ class TestStockValuationChangeValuation(TestStockValuationCommon):
         # An accounting entry should only be created for the emptying now that the category is manual.
         self.assertEqual(len(self.product1.stock_valuation_layer_ids.mapped('account_move_id')), 2)
         self.assertEqual(len(self.product1.stock_valuation_layer_ids), 3)
+
+    def test_return_delivery_fifo(self):
+        self.product1.product_tmpl_id.categ_id.property_cost_method = 'fifo'
+        self.env['decimal.precision'].search([
+            ('name', '=', 'Product Price'),
+        ]).digits = 4
+        self.product1.standard_price = 280.8475
+
+        move1 = self._make_out_move(self.product1, 4, create_picking=True, force_assign=True)
+        move2 = self._make_return(move1, 4)
+
+        for move in [move1, move2]:
+            self.assertEqual(len(move.stock_valuation_layer_ids), 1)
+            self.assertAlmostEqual(move.stock_valuation_layer_ids.unit_cost, self.product1.standard_price)
+            self.assertAlmostEqual(abs(move.stock_valuation_layer_ids.value), 1123.39)
 
 @tagged('post_install', '-at_install')
 class TestAngloSaxonAccounting(AccountTestInvoicingCommon):

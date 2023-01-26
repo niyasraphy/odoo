@@ -441,6 +441,7 @@ class HolidaysAllocation(models.Model):
             days_added_per_level = defaultdict(lambda: 0)
             while allocation.nextcall <= date_to:
                 (current_level, current_level_idx) = allocation._get_current_accrual_plan_level_id(allocation.nextcall)
+                current_level_maximum_leave = current_level.maximum_leave if current_level.added_value_type == "days" else current_level.maximum_leave / (allocation.employee_id.sudo().resource_id.calendar_id.hours_per_day or HOURS_PER_DAY)
                 nextcall = current_level._get_next_date(allocation.nextcall)
                 # Since _get_previous_date returns the given date if it corresponds to a call date
                 # this will always return lastcall except possibly on the first call
@@ -469,8 +470,8 @@ class HolidaysAllocation(models.Model):
                 gained_days = allocation._process_accrual_plan_level(
                     current_level, period_start, allocation.lastcall, period_end, allocation.nextcall)
                 days_added_per_level[current_level] += gained_days
-                if current_level.maximum_leave > 0 and sum(days_added_per_level.values()) > current_level.maximum_leave:
-                    days_added_per_level[current_level] -= sum(days_added_per_level.values()) - current_level.maximum_leave
+                if current_level_maximum_leave > 0 and sum(days_added_per_level.values()) > current_level_maximum_leave:
+                    days_added_per_level[current_level] -= sum(days_added_per_level.values()) - current_level_maximum_leave
 
                 allocation.lastcall = allocation.nextcall
                 allocation.nextcall = nextcall
@@ -481,7 +482,7 @@ class HolidaysAllocation(models.Model):
             if days_added_per_level:
                 number_of_days_to_add = allocation.number_of_days + sum(days_added_per_level.values())
                 # Let's assume the limit of the last level is the correct one
-                allocation.number_of_days = min(number_of_days_to_add, current_level.maximum_leave + allocation.leaves_taken) if current_level.maximum_leave > 0 else number_of_days_to_add
+                allocation.number_of_days = min(number_of_days_to_add, current_level_maximum_leave + allocation.leaves_taken) if current_level_maximum_leave > 0 else number_of_days_to_add
 
     @api.model
     def _update_accrual(self):
@@ -567,10 +568,8 @@ class HolidaysAllocation(models.Model):
             holiday.message_subscribe(partner_ids=tuple(partners_to_subscribe))
             if not self._context.get('import_file'):
                 holiday.activity_update()
-            if holiday.validation_type == 'no':
-                if holiday.state == 'draft':
-                    holiday.action_confirm()
-                    holiday.action_validate()
+            if holiday.validation_type == 'no' and holiday.state == 'draft':
+                holiday.action_confirm()
         return holidays
 
     def write(self, values):
@@ -634,9 +633,10 @@ class HolidaysAllocation(models.Model):
     def action_confirm(self):
         if self.filtered(lambda holiday: holiday.state != 'draft' and holiday.validation_type != 'no'):
             raise UserError(_('Allocation request must be in Draft state ("To Submit") in order to confirm it.'))
-        res = self.write({'state': 'confirm'})
+        validated_holidays = self.filtered(lambda holiday: holiday.state == 'validate')
+        res = (self - validated_holidays).write({'state': 'confirm'})
         self.activity_update()
-        self.filtered(lambda holiday: holiday.validation_type == 'no').action_validate()
+        self.filtered(lambda holiday: holiday.validation_type == 'no' and holiday.state != 'validate').action_validate()
         return res
 
     def action_validate(self):
@@ -737,13 +737,16 @@ class HolidaysAllocation(models.Model):
         responsible = self.env.user
 
         if self.validation_type == 'officer' or self.validation_type == 'set':
-            if self.holiday_status_id.responsible_id:
-                responsible = self.holiday_status_id.responsible_id
+            if self.holiday_status_id.responsible_ids:
+                responsible = self.holiday_status_id.responsible_ids
+            else:
+                responsible = self.env.ref('hr_holidays.group_hr_holidays_user').users.filtered(lambda u: self.holiday_status_id.company_id in u.company_ids)
 
         return responsible
 
     def activity_update(self):
         to_clean, to_do = self.env['hr.leave.allocation'], self.env['hr.leave.allocation']
+        activity_vals = []
         for allocation in self:
             if allocation.validation_type != 'no':
                 note = _(
@@ -755,24 +758,25 @@ class HolidaysAllocation(models.Model):
                 if allocation.state == 'draft':
                     to_clean |= allocation
                 elif allocation.state == 'confirm':
-                    allocation.activity_schedule(
-                        'hr_holidays.mail_act_leave_allocation_approval',
-                        note=note,
-                        user_id=allocation.sudo()._get_responsible_for_approval().id or self.env.user.id)
-                elif allocation.state == 'validate1':
-                    allocation.activity_feedback(['hr_holidays.mail_act_leave_allocation_approval'])
-                    allocation.activity_schedule(
-                        'hr_holidays.mail_act_leave_allocation_second_approval',
-                        note=note,
-                        user_id=allocation.sudo()._get_responsible_for_approval().id or self.env.user.id)
+                    user_ids = allocation.sudo()._get_responsible_for_approval().ids or self.env.user.ids
+                    for user_id in user_ids:
+                        activity_vals.append({
+                            'activity_type_id': self.env.ref('hr_holidays.mail_act_leave_allocation_approval').id,
+                            'automated': True,
+                            'note': note,
+                            'user_id': user_id,
+                            'res_id': allocation.id,
+                            'res_model_id': self.env.ref('hr_holidays.model_hr_leave_allocation').id,
+                        })
                 elif allocation.state == 'validate':
                     to_do |= allocation
                 elif allocation.state == 'refuse':
                     to_clean |= allocation
+        self.env['mail.activity'].create(activity_vals)
         if to_clean:
-            to_clean.activity_unlink(['hr_holidays.mail_act_leave_allocation_approval', 'hr_holidays.mail_act_leave_allocation_second_approval'])
+            to_clean.activity_unlink(['hr_holidays.mail_act_leave_allocation_approval'])
         if to_do:
-            to_do.activity_feedback(['hr_holidays.mail_act_leave_allocation_approval', 'hr_holidays.mail_act_leave_allocation_second_approval'])
+            to_do.activity_feedback(['hr_holidays.mail_act_leave_allocation_approval'])
 
     ####################################################
     # Messaging methods
@@ -813,7 +817,7 @@ class HolidaysAllocation(models.Model):
 
     def message_subscribe(self, partner_ids=None, subtype_ids=None):
         # due to record rule can not allow to add follower and mention on validated leave so subscribe through sudo
-        if self.state in ['validate', 'validate1']:
+        if any(state in ['validate', 'validate1'] for state in self.mapped('state')):
             self.check_access_rights('read')
             self.check_access_rule('read')
             return super(HolidaysAllocation, self.sudo()).message_subscribe(partner_ids=partner_ids, subtype_ids=subtype_ids)

@@ -1133,7 +1133,7 @@ class AccountMove(models.Model):
 
                 kwargs = {
                     'base_lines': base_line_values_list,
-                    'currency': move.currency_id,
+                    'currency': move.currency_id or move.journal_id.currency_id or move.journal_id.company_id.currency_id,
                 }
 
                 if move.id:
@@ -2378,6 +2378,7 @@ class AccountMove(models.Model):
     # -------------------------------------------------------------------------
 
     def _get_last_sequence_domain(self, relaxed=False):
+        #pylint: disable=sql-injection
         # EXTENDS account sequence.mixin
         self.ensure_one()
         if not self.date or not self.journal_id:
