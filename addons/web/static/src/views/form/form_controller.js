@@ -208,7 +208,7 @@ export class FormController extends Component {
         useDebugCategory("form", { component: this });
 
         usePager(() => {
-            if (!this.model.root.isVirtual) {
+            if (!this.model.root.isNew) {
                 const resIds = this.model.root.resIds;
                 return {
                     offset: resIds.indexOf(this.model.root.resId),
@@ -342,7 +342,7 @@ export class FormController extends Component {
                 callback: () => this.duplicateRecord(),
             },
             delete: {
-                isAvailable: () => activeActions.delete && !this.model.root.isVirtual,
+                isAvailable: () => activeActions.delete && !this.model.root.isNew,
                 sequence: 40,
                 description: this.env._t("Delete"),
                 callback: () => this.deleteRecord(),
@@ -365,7 +365,7 @@ export class FormController extends Component {
     }
 
     async shouldExecuteAction(item) {
-        if ((this.model.root.isDirty || this.model.root.isVirtual) && !item.skipSave) {
+        if ((this.model.root.isDirty || this.model.root.isNew) && !item.skipSave) {
             return this.model.root.save({ stayInEdition: true, useSaveErrorDialog: true });
         }
         return true;
@@ -399,8 +399,9 @@ export class FormController extends Component {
 
     async beforeExecuteActionButton(clickParams) {
         if (clickParams.special !== "cancel") {
+            const noReload = this.env.inDialog && clickParams.close;
             return this.model.root
-                .save({ stayInEdition: true, useSaveErrorDialog: !this.env.inDialog })
+                .save({ stayInEdition: true, useSaveErrorDialog: !this.env.inDialog, noReload })
                 .then((saved) => {
                     if (saved && this.props.onSave) {
                         this.props.onSave(this.model.root);
@@ -451,7 +452,7 @@ export class FormController extends Component {
         if (this.props.saveRecord) {
             saved = await this.props.saveRecord(record, params);
         } else {
-            saved = await record.save();
+            saved = await record.save(params);
         }
         this.enableButtons();
         if (saved && this.props.onSave) {
@@ -477,7 +478,7 @@ export class FormController extends Component {
         if (this.props.onDiscard) {
             this.props.onDiscard(this.model.root);
         }
-        if (this.model.root.isVirtual || this.env.inDialog) {
+        if (this.model.root.isNew || this.env.inDialog) {
             this.env.config.historyBack();
         }
     }

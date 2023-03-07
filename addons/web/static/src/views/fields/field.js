@@ -18,7 +18,7 @@ const fieldRegistry = registry.category("fields");
 class DefaultField extends Component {}
 DefaultField.template = xml``;
 
-function getFieldFromRegistry(fieldType, widget, viewType, jsClass) {
+export function getFieldFromRegistry(fieldType, widget, viewType, jsClass) {
     const prefixes = jsClass ? [jsClass, viewType, ""] : [viewType, ""];
     const findInRegistry = (key) => {
         for (const prefix of prefixes) {
@@ -43,7 +43,7 @@ export function fieldVisualFeedback(field, record, fieldName, fieldInfo) {
     const readonly = evalDomain(modifiers.readonly, record.evalContext);
     const inEdit = record.isInEdition;
 
-    let empty = !record.isVirtual;
+    let empty = !record.isNew;
     if ("isEmpty" in field) {
         empty = empty && field.isEmpty(record, fieldName);
     } else {
@@ -140,7 +140,6 @@ export class Field extends Component {
         delete props.type;
 
         return {
-            value: this.props.record.data[this.props.name],
             readonly: !record.isInEdition || readonlyFromModifiers || false,
             ...propsFromNode,
             ...props,
@@ -228,12 +227,12 @@ Field.parseFieldNode = function (node, models, modelName, viewType, jsClass) {
         fieldInfo.viewMode = viewMode;
         fieldInfo.views = views;
 
-        let fieldsToFetch = field.fieldsToFetch;
-        if (fieldsToFetch) {
-            if (fieldsToFetch instanceof Function) {
-                fieldsToFetch = fieldsToFetch(fieldInfo);
+        let relatedFields = field.relatedFields;
+        if (relatedFields) {
+            if (relatedFields instanceof Function) {
+                relatedFields = relatedFields(fieldInfo);
             }
-            fieldInfo.fieldsToFetch = Object.fromEntries(fieldsToFetch.map((f) => [f.name, f]));
+            fieldInfo.relatedFields = Object.fromEntries(relatedFields.map((f) => [f.name, f]));
         }
     }
 

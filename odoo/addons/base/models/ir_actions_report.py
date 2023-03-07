@@ -296,6 +296,9 @@ class IrActionsReport(models.Model):
             if paperformat_id.disable_shrinking:
                 command_args.extend(['--disable-smart-shrinking'])
 
+        # Add extra time to allow the page to render
+        command_args.extend(['--javascript-delay', '1000'])
+
         if landscape:
             command_args.extend(['--orientation', 'landscape'])
 
@@ -807,6 +810,14 @@ class IrActionsReport(models.Model):
                 if stream_data['attachment']:
                     continue
 
+                # if res_id is false
+                # we are unable to fetch the record, it won't be saved as we can't split the documents unambiguously
+                if not res_id:
+                    _logger.warning(
+                        "These documents were not saved as an attachment because the template of %s doesn't "
+                        "have any headers seperating different instances of it. If you want it saved,"
+                        "please print the documents separately", report_sudo.report_name)
+                    continue
                 record = self.env[report_sudo.model].browse(res_id)
                 attachment_name = safe_eval(report_sudo.attachment, {'object': record, 'time': time})
 

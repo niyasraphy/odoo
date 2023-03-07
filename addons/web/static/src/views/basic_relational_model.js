@@ -176,11 +176,6 @@ export class Record extends DataPoint {
     }
 
     get isNew() {
-        return this.model.__bm__.isNew(this.__bm_handle__);
-    }
-
-    get isVirtual() {
-        // FIXME: not sure about this virtual thing
         return !this.resId;
     }
 
@@ -207,7 +202,7 @@ export class Record extends DataPoint {
 
     async askChanges() {
         const proms = [];
-        this.model.env.bus.trigger("RELATIONAL_MODEL:NEED_LOCAL_CHANGES", { proms });
+        this.model.trigger("NEED_LOCAL_CHANGES", { proms });
         return Promise.all([...proms, this._updatePromise]);
     }
 
@@ -595,15 +590,17 @@ export class Record extends DataPoint {
      *  applicable, allowing to catch it.
      * @returns {Promise<boolean>}
      */
-    async save(
-        options = {
-            stayInEdition: true,
-            noReload: false,
-            savePoint: false,
-            useSaveErrorDialog: false,
-            throwOnError: false,
-        }
-    ) {
+    async save(options = {}) {
+        options = Object.assign(
+            {
+                stayInEdition: true,
+                noReload: false,
+                savePoint: false,
+                useSaveErrorDialog: false,
+                throwOnError: false,
+            },
+            options
+        );
         const shouldSwitchToReadonly = !options.stayInEdition && this.isInEdition;
         let resolveSavePromise;
         this._savePromise = new Promise((r) => {
@@ -694,7 +691,7 @@ export class Record extends DataPoint {
     async urgentSave() {
         this.model.__bm__.bypassMutex = true;
         this._urgentSave = true;
-        this.model.env.bus.trigger("RELATIONAL_MODEL:WILL_SAVE_URGENTLY");
+        this.model.trigger("WILL_SAVE_URGENTLY");
         await Promise.resolve();
         this.__syncData();
         let isValid = true;
